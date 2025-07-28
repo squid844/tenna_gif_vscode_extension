@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Tenna</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="drag-region">
+        <img id="tenna" src="gifs/tenna_1.gif" />
+    </div>
+    <script>
+        const { ipcRenderer } = require('electron');
+        ipcRenderer.on('update-gif', (event, name) => {
+            document.getElementById('tenna').src = 'gifs/' + name;
+        });
+    </script>
+</body>
+</html>

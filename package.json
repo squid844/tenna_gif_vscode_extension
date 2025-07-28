@@ -1,0 +1,49 @@
+{
+  "name": "tenna-dancer",
+  "displayName": "Tenna Dancer",
+  "description": "Un petit danseur flottant pour votre bureau",
+  "version": "0.0.1",
+  "publisher": "votre-pseudo",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:tenna-dancer.start"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "tenna-dancer.start",
+        "title": "Lancer Tenna Dancer"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "tennaDanceContainer",
+          "title": "Tenna",
+          "icon": "media/icon.png"
+        }
+      ]
+    },
+    "views": {
+      "tennaDanceContainer": [
+        {
+          "id": "tennaView",
+          "name": "Dance!",
+          "type": "webview"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "start": "node_modules/.bin/electron electron-app"
+  },
+  "devDependencies": {
+    "electron": "^28.3.3"
+  }
+}
