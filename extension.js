@@ -7,11 +7,11 @@ let electronProcess;
 function activate(context) {
     console.log('Tenna Dancer extension activated');
 
-    // Commande manuelle
+    // Enregistrement de la commande
     const startCommand = vscode.commands.registerCommand('tenna-dancer.start', () => {
+        console.log('👉 Commande tenna-dancer.start déclenchée');
         launchElectron(context);
     });
-
     context.subscriptions.push(startCommand);
 
     // Lance automatiquement à l'activation
@@ -27,35 +27,42 @@ function activate(context) {
 function deactivate() {
     if (electronProcess) {
         electronProcess.kill();
+        electronProcess = null;
     }
 }
 
 function launchElectron(context) {
-    const electronPath = path.join(
-        context.extensionPath,
-        'electron-app',
-        'node_modules',
-        '.bin',
-        process.platform === 'win32' ? 'electron.cmd' : 'electron'
-    );
+    const electronBinary = process.platform === 'win32'
+        ? path.join(context.extensionPath, 'node_modules', 'electron', 'dist', 'electron.exe')
+        : path.join(context.extensionPath, 'node_modules', 'electron', 'dist', 'electron');
 
     const appPath = path.join(context.extensionPath, 'electron-app');
+    const env = {...process.env};
+    delete env.ELECTRON_RUN_AS_NODE;
+    console.log('👉 launchElectron appelé');
+    console.log('electronBinary:', electronBinary);
 
     try {
-        electronProcess = spawn(electronPath, ['.'], {
+        electronProcess = spawn(electronBinary, ['.'], {
             cwd: appPath,
-            detached: false,           // ne détache pas pour pouvoir voir le process
-            stdio: 'inherit',          // affiche stdout/stderr dans la console VSCode
-            shell: process.platform === 'win32'
+            detached: true,
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env
         });
 
-        electronProcess.on('error', (err) => {
-            console.error('Erreur spawn Electron:', err);
+        electronProcess.stdout.on('data', (data) => {
+            console.log('Electron log:', data.toString());
         });
 
-        electronProcess.on('exit', (code, signal) => {
+        electronProcess.stderr.on('data', (data) => {
+            console.error('Electron error:', data.toString());
+        });
+
+        electronProcess.on('close', (code, signal) => {
             console.log(`Process Electron terminé avec code ${code} signal ${signal}`);
         });
+
+        electronProcess.unref();
     } catch (error) {
         console.error("Erreur au lancement d'Electron :", error);
     }
@@ -95,7 +102,6 @@ class TennaViewProvider {
             switch (message.command) {
                 case 'changeGif':
                     vscode.window.showInformationMessage('Changement du gif : ' + message.name);
-                    // TODO: envoyer le message à Electron si souhaité
                     break;
                 case 'close':
                     vscode.window.showInformationMessage('Fermeture demandée');
