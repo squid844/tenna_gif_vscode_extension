@@ -9,9 +9,13 @@
     <div id="drag-region">
         <img id="tenna" src="gifs/tenna_1.gif" />
     </div>
+
     <script>
         const { ipcRenderer } = require('electron');
+
+        // Réception de la mise à jour du GIF depuis le main process
         ipcRenderer.on('update-gif', (event, name) => {
+            console.log('[Renderer] Mise à jour du gif :', name);
             document.getElementById('tenna').src = 'gifs/' + name;
         });
     </script>
