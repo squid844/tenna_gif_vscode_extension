@@ -176,63 +176,122 @@ function updateWebview() {
     if (!providerInstance || !providerInstance._view) return;
 
     const gifs = listGifs();
-    const gifsOptions = gifs.map(g => `<option value="${g}">${g}</option>`).join('');
+    const gifsOptions = gifs.map(g => `<option class = "btn_small" value="${g}">${g}</option>`).join('');
 
     const dancersList = dancers.map(d => `
-        <li style="margin-top: 5px;">
-            <span><strong>${d.gif}</strong></span>
-            <select id="gif-${d.id}">
-                ${gifsOptions}
-            </select>
-            <button onclick="changeGif('${d.id}')">Changer</button>
-            <button onclick="remove('${d.id}')">Arrêter</button>
-        </li>
-    `).join('');
+  <li style="margin-top: 5px; position: relative;">
+    <span><strong>${d.gif}</strong></span>
+    <div class="dropdown">
+      <button class="btn_small dropdown-btn"> Change </button>
+      <div class="dropdown-content">
+        ${gifs.map(gif => `
+          <div class="dropdown-item" onclick="changeGif('${d.id}', '${gif}')">${gif}</div>
+        `).join('')}
+      </div>
+    </div>
+    <button class="btn_small" onclick="remove('${d.id}')"> Remove</button>
+  </li>
+`).join('');
 
     const html = `
-        <!DOCTYPE html>
-        <html>
-        <body>
-            <h3>🎵 Tenna Settings</h3>
-            <button class="btn" onclick="add()">➕ Ajouter un danseur</button>
-            <button class="btn" onclick="stopAll()">🛑 Arrêter tout</button>
-            <button class="btn" onclick="addGif()">📂 Ajouter un GIF</button>
-            <ul>${dancersList}</ul>
+<!DOCTYPE html>
+<html>
+  <body>
+    <h3> GIF Settings </h3>
+    <button class="btn" onclick="add()">➕ Add a GIF to the screen</button>
+    <button class="btn" onclick="stopAll()">🛑 Stop All GIFs</button>
+    <button class="btn" onclick="addGif()">📂 Add a GIF to the folder</button>
+    <ul>${dancers.map(d => `
+      <li style="margin-top: 5px;">
+        <span><strong>${d.gif}</strong></span>
+        <div class="dropdown">
+          <button class="btn_small dropdown-btn">🎬 Changer</button>
+          <div class="dropdown-content">
+            ${gifs.map(g => `
+              <div class="dropdown-item" onclick="changeGif('${d.id}', '${g}')">${g}</div>
+            `).join('')}
+          </div>
+        </div>
+        <button class="btn_small" onclick="remove('${d.id}')">❌ Remove</button>
+      </li>
+    `).join('')}</ul>
 
-            <style>
-                body {
-                    font-family: sans-serif;
-                    padding: 1em;
-                    background-color: var(--vscode-editor-background);
-                    color: var(--vscode-editor-foreground);
-                }
-                .btn {
-                    background: var(--vscode-button-background);
-                    color: var(--vscode-button-foreground);
-                    border: none;
-                    border-radius: 4px;
-                    padding: 5px 10px;
-                    margin: 3px;
-                }
-                .btn:hover {
-                    background: var(--vscode-button-hoverBackground);
-                }
-            </style>
+    <style>
+      body {
+        font-family: arial, sans-serif;
+        padding: 1em;
+        background-color: var(--vscode-editor-background);
+        color: var(--vscode-editor-foreground);
+      }
 
-            <script>
-                const vscode = acquireVsCodeApi();
-                function add() { vscode.postMessage({ command: 'add' }); }
-                function stopAll() { vscode.postMessage({ command: 'stopAll' }); }
-                function addGif() { vscode.postMessage({ command: 'addGif' }); }
-                function changeGif(id) {
-                    const select = document.getElementById('gif-' + id);
-                    vscode.postMessage({ command: 'changeGif', id, gif: select.value });
-                }
-                function remove(id) { vscode.postMessage({ command: 'remove', id }); }
-            </script>
-        </body>
-        </html>
-    `;
+      .btn, .btn_small {
+        background: var(--vscode-button-background);
+        color: var(--vscode-button-foreground);
+        border: 2px solid;
+        border-radius: 8px;
+        padding: 5px 10px;
+        margin: 3px;
+        cursor: pointer;
+      }
+
+      .btn {
+        width: 160px;
+        height: 40px;
+      }
+
+      .btn_small {
+        min-width: 80px;
+        height: 30px;
+      }
+
+      .btn:hover, .btn_small:hover {
+        background: var(--vscode-button-hoverBackground);
+      }
+
+      .dropdown {
+        position: relative;
+        display: inline-block;
+      }
+
+      .dropdown-content {
+        display: none;
+        position: absolute;
+        background-color: var(--vscode-editor-background);
+        border: 1px solid var(--vscode-editorWidget-border);
+        z-index: 10;
+        min-width: 160px;
+        border-radius: 6px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      }
+
+      .dropdown-content .dropdown-item {
+        color: var(--vscode-button-foreground);
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+
+      .dropdown-content .dropdown-item:hover {
+        background-color: var(--vscode-button-hoverBackground);
+      }
+
+      .dropdown:hover .dropdown-content {
+        display: block;
+      }
+    </style>
+
+    <script>
+      const vscode = acquireVsCodeApi();
+      function add() { vscode.postMessage({ command: 'add' }); }
+      function stopAll() { vscode.postMessage({ command: 'stopAll' }); }
+      function addGif() { vscode.postMessage({ command: 'addGif' }); }
+      function remove(id) { vscode.postMessage({ command: 'remove', id }); }
+      function changeGif(id, gif) {
+        vscode.postMessage({ command: 'changeGif', id, gif });
+      }
+    </script>
+  </body>
+</html>
+`;
 
     providerInstance.update(html);
 }
