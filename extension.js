@@ -1,28 +1,29 @@
 const vscode = require('vscode');
 const path = require('path');
-const { spawn } = require('child_process');
 const fs = require('fs');
+const os = require('os');
+const { spawn } = require('child_process');
 
-let dancers = []; // [{ id, process, gif }]
+let dancers = [];
 let providerInstance;
+let contextGlobal;
 
 function activate(context) {
+    contextGlobal = context;
     console.log('Tenna Dancer extension activated');
 
-    // Commande "Lancer Tenna Dancer"
     const startCommand = vscode.commands.registerCommand('tenna-dancer.start', () => {
-        createDancerWithGif(context);
+        createDancerWithGif();
     });
     context.subscriptions.push(startCommand);
 
-    // Lancement initial
-    createDancerWithGif(context);
-
-    // Sidebar
     providerInstance = new TennaViewProvider(context.extensionUri);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider('tennaView', providerInstance)
     );
+
+    // Lancement initial
+    createDancerWithGif();
 }
 
 function deactivate() {
@@ -30,83 +31,69 @@ function deactivate() {
     dancers = [];
 }
 
-// 📂 Liste les GIFs disponibles dans le dossier gifs/
 function listGifs() {
-    const gifsPath = path.join(vscode.extensions.getExtension('votre-pseudo.tenna-dancer').extensionPath, 'electron-app', 'gifs');
+    const gifsPath = path.join(contextGlobal.extensionPath, 'electron-app', 'gifs');
     if (fs.existsSync(gifsPath)) {
         return fs.readdirSync(gifsPath).filter(file => /\.(gif|png|jpg)$/i.test(file));
     }
     return [];
 }
 
-// ➕ Ajoute un danseur avec choix du GIF
-async function createDancerWithGif(context) {
+async function createDancerWithGif() {
     const gifs = listGifs();
     if (gifs.length === 0) {
-        vscode.window.showErrorMessage('Aucun GIF trouvé. Ajoute d\'abord un GIF.');
+        vscode.window.showErrorMessage('Aucun GIF trouvé. Ajoutez-en un d\'abord.');
         return;
     }
 
-    // Menu pour choisir le GIF au lancement
     const selected = await vscode.window.showQuickPick(gifs, {
-        placeHolder: 'Choisissez un GIF pour ce danseur'
+        placeHolder: 'Choisissez un GIF'
     });
 
     if (selected) {
-        addDancer(context, selected);
+        addDancer(selected);
     }
 }
 
-// ➕ Lance le processus Electron pour un danseur
-function addDancer(context, gifName) {
+function addDancer(gifName) {
     const id = Date.now().toString();
     const electronBinary = process.platform === 'win32'
-        ? path.join(context.extensionPath, 'node_modules', 'electron', 'dist', 'electron.exe')
-        : path.join(context.extensionPath, 'node_modules', 'electron', 'dist', 'electron');
+        ? path.join(contextGlobal.extensionPath, 'node_modules', 'electron', 'dist', 'electron.exe')
+        : path.join(contextGlobal.extensionPath, 'node_modules', 'electron', 'dist', 'electron');
 
-    const appPath = path.join(context.extensionPath, 'electron-app');
+    const appPath = path.join(contextGlobal.extensionPath, 'electron-app');
 
     const env = { ...process.env };
     delete env.ELECTRON_RUN_AS_NODE;
 
-    try {
-        const child = spawn(electronBinary, ['.'], {
-            cwd: appPath,
-            detached: true,
-            stdio: ['pipe', 'pipe', 'pipe'],
-            env
-        });
+    const child = spawn(electronBinary, ['main.js', id, gifName], {
+        cwd: appPath,
+        detached: true,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env
+    });
 
-        // On définit le GIF choisi pour ce danseur
-        if (child.stdin.writable) {
-            child.stdin.write(`CHANGE:${gifName}\n`);
-        }
-
-        child.on('close', () => {
-            dancers = dancers.filter(d => d.id !== id);
-            updateWebview();
-        });
-
-        child.unref();
-
-        dancers.push({ id, process: child, gif: gifName });
-        updateWebview();
-    } catch (error) {
-        console.error("Erreur au lancement d'Electron :", error);
-    }
+    dancers.push({ id, process: child, gif: gifName });
+    console.log(`🚶‍♂️ Danseur ${id} lancé avec ${gifName}`);
+    updateWebview();
 }
 
-// 🔄 Change le GIF d’un danseur
 function changeGif(id, newGif) {
     const dancer = dancers.find(d => d.id === id);
-    if (dancer && dancer.process.stdin.writable) {
-        dancer.gif = newGif; // mise à jour du nom
+    if (!dancer) return;
+
+    dancer.gif = newGif;
+
+    if (dancer.process.stdin.writable) {
         dancer.process.stdin.write(`CHANGE:${newGif}\n`);
-        updateWebview();
+        console.log(`✔️ Commande envoyée au danseur ${id}: CHANGE:${newGif}`);
+    } else {
+        console.warn(`❌ Impossible d'écrire dans stdin du danseur ${id}`);
     }
+
+    updateWebview();
 }
 
-// ❌ Supprime un danseur
 function removeDancer(id) {
     const dancer = dancers.find(d => d.id === id);
     if (dancer) {
@@ -116,21 +103,20 @@ function removeDancer(id) {
     }
 }
 
-// ⛔ Arrête tous les danseurs
 function stopAll() {
     dancers.forEach(d => d.process.kill());
     dancers = [];
     updateWebview();
 }
 
-// ➕ Ajouter un nouveau GIF
 async function addGif() {
     const uris = await vscode.window.showOpenDialog({
         canSelectMany: false,
         filters: { Images: ['gif', 'png', 'jpg'] }
     });
+
     if (uris && uris.length > 0) {
-        const gifsPath = path.join(vscode.extensions.getExtension('votre-pseudo.tenna-dancer').extensionPath, 'electron-app', 'gifs');
+        const gifsPath = path.join(contextGlobal.extensionPath, 'electron-app', 'gifs');
         if (!fs.existsSync(gifsPath)) fs.mkdirSync(gifsPath, { recursive: true });
         const source = uris[0].fsPath;
         const dest = path.join(gifsPath, path.basename(source));
@@ -140,7 +126,6 @@ async function addGif() {
     }
 }
 
-// 🔹 Provider WebView
 class TennaViewProvider {
     constructor(extensionUri) {
         this._extensionUri = extensionUri;
@@ -153,7 +138,7 @@ class TennaViewProvider {
 
         webviewView.webview.onDidReceiveMessage((message) => {
             switch (message.command) {
-                case 'add': createDancerWithGif({ extensionPath: this._extensionUri.fsPath }); break;
+                case 'add': createDancerWithGif(); break;
                 case 'stopAll': stopAll(); break;
                 case 'changeGif': changeGif(message.id, message.gif); break;
                 case 'remove': removeDancer(message.id); break;
@@ -171,37 +156,12 @@ class TennaViewProvider {
     }
 }
 
-// 🔄 Met à jour le panneau WebView
 function updateWebview() {
     if (!providerInstance || !providerInstance._view) return;
 
     const gifs = listGifs();
-    const gifsOptions = gifs.map(g => `<option class = "btn_small" value="${g}">${g}</option>`).join('');
 
     const dancersList = dancers.map(d => `
-  <li style="margin-top: 5px; position: relative;">
-    <span><strong>${d.gif}</strong></span>
-    <div class="dropdown">
-      <button class="btn_small dropdown-btn"> Change </button>
-      <div class="dropdown-content">
-        ${gifs.map(gif => `
-          <div class="dropdown-item" onclick="changeGif('${d.id}', '${gif}')">${gif}</div>
-        `).join('')}
-      </div>
-    </div>
-    <button class="btn_small" onclick="remove('${d.id}')"> Remove</button>
-  </li>
-`).join('');
-
-    const html = `
-<!DOCTYPE html>
-<html>
-  <body>
-    <h3> GIF Settings </h3>
-    <button class="btn" onclick="add()">➕ Add a GIF to the screen</button>
-    <button class="btn" onclick="stopAll()">🛑 Stop All GIFs</button>
-    <button class="btn" onclick="addGif()">📂 Add a GIF to the folder</button>
-    <ul>${dancers.map(d => `
       <li style="margin-top: 5px;">
         <span><strong>${d.gif}</strong></span>
         <div class="dropdown">
@@ -214,69 +174,29 @@ function updateWebview() {
         </div>
         <button class="btn_small" onclick="remove('${d.id}')">❌ Remove</button>
       </li>
-    `).join('')}</ul>
+    `).join('');
+
+    const html = `
+<!DOCTYPE html>
+<html>
+  <body>
+    <h3> GIF Settings </h3>
+    <button class="btn" onclick="add()">➕ Add a GIF</button>
+    <button class="btn" onclick="stopAll()">🛑 Stop All</button>
+    <button class="btn" onclick="addGif()">📂 Add GIF to folder</button>
+    <ul>${dancersList}</ul>
 
     <style>
-      body {
-        font-family: arial, sans-serif;
-        padding: 1em;
-        background-color: var(--vscode-editor-background);
-        color: var(--vscode-editor-foreground);
-      }
-
-      .btn, .btn_small {
-        background: var(--vscode-button-background);
-        color: var(--vscode-button-foreground);
-        border: 2px solid;
-        border-radius: 8px;
-        padding: 5px 10px;
-        margin: 3px;
-        cursor: pointer;
-      }
-
-      .btn {
-        width: 160px;
-        height: 40px;
-      }
-
-      .btn_small {
-        min-width: 80px;
-        height: 30px;
-      }
-
-      .btn:hover, .btn_small:hover {
-        background: var(--vscode-button-hoverBackground);
-      }
-
-      .dropdown {
-        position: relative;
-        display: inline-block;
-      }
-
-      .dropdown-content {
-        display: none;
-        position: absolute;
-        background-color: var(--vscode-editor-background);
-        border: 1px solid var(--vscode-editorWidget-border);
-        z-index: 10;
-        min-width: 160px;
-        border-radius: 6px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-      }
-
-      .dropdown-content .dropdown-item {
-        color: var(--vscode-button-foreground);
-        padding: 8px 12px;
-        cursor: pointer;
-      }
-
-      .dropdown-content .dropdown-item:hover {
-        background-color: var(--vscode-button-hoverBackground);
-      }
-
-      .dropdown:hover .dropdown-content {
-        display: block;
-      }
+      body { font-family: sans-serif; padding: 1em; background: var(--vscode-editor-background); color: var(--vscode-editor-foreground); }
+      .btn, .btn_small { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: 1px solid; border-radius: 6px; margin: 4px; cursor: pointer; }
+      .btn { padding: 8px 16px; }
+      .btn_small { padding: 4px 8px; font-size: 12px; }
+      .btn:hover, .btn_small:hover { background: var(--vscode-button-hoverBackground); }
+      .dropdown { position: relative; display: inline-block; }
+      .dropdown-content { display: none; position: absolute; background: var(--vscode-editor-background); border: 1px solid var(--vscode-editorWidget-border); z-index: 10; border-radius: 6px; }
+      .dropdown:hover .dropdown-content { display: block; }
+      .dropdown-item { padding: 5px 10px; cursor: pointer; }
+      .dropdown-item:hover { background: var(--vscode-button-hoverBackground); }
     </style>
 
     <script>
@@ -285,9 +205,7 @@ function updateWebview() {
       function stopAll() { vscode.postMessage({ command: 'stopAll' }); }
       function addGif() { vscode.postMessage({ command: 'addGif' }); }
       function remove(id) { vscode.postMessage({ command: 'remove', id }); }
-      function changeGif(id, gif) {
-        vscode.postMessage({ command: 'changeGif', id, gif });
-      }
+      function changeGif(id, gif) { vscode.postMessage({ command: 'changeGif', id, gif }); }
     </script>
   </body>
 </html>
@@ -296,7 +214,4 @@ function updateWebview() {
     providerInstance.update(html);
 }
 
-module.exports = {
-    activate,
-    deactivate
-};
+module.exports = { activate, deactivate };

@@ -1,14 +1,23 @@
-process.removeAllListeners('warning');
-const { app, BrowserWindow, ipcMain } = require('electron');
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const { app, BrowserWindow, ipcMain } = require('electron');
 
 let win;
-let currentGif = null; // on ne met plus de valeur par défaut
+let currentGif = null;
+let tmpPath = null;
+
+const [,, dancerId, gifName] = process.argv;
+
+if (dancerId && gifName) {
+    currentGif = gifName;
+    tmpPath = path.join(os.tmpdir(), `tenna-dancer-${dancerId}.json`);
+}
 
 function createWindow() {
     win = new BrowserWindow({
-        width: 120,
-        height: 160,
+        width: 140,
+        height: 140,
         frame: false,
         transparent: true,
         alwaysOnTop: true,
@@ -23,52 +32,33 @@ function createWindow() {
     win.setMenuBarVisibility(false);
     win.loadFile('index.html');
 
-    win.setAlwaysOnTop(true, 'normal');
-
-    // On applique directement le GIF courant quand la fenêtre est prête
     win.webContents.on('did-finish-load', () => {
         if (currentGif) {
             win.webContents.send('update-gif', currentGif);
         }
     });
 
-    // Écoute des commandes IPC internes (pas obligatoire ici mais on le garde)
-    ipcMain.on('change-gif', (event, name) => {
-        currentGif = name;
-        if (win) {
-            win.webContents.send('update-gif', currentGif);
-        }
+    ipcMain.on('change-gif', (event, newGif) => {
+        currentGif = newGif;
+        win.webContents.send('update-gif', currentGif);
     });
 }
-
-// 🔹 Ecoute les commandes envoyées par l'extension (stdin)
+process.stdin.setEncoding('utf8');
 process.stdin.on('data', (data) => {
-    const message = data.toString().trim();
-
-    // On reçoit une commande pour changer le GIF
-    if (message.startsWith('CHANGE:')) {
-        const newGif = message.replace('CHANGE:', '').trim();
-        currentGif = newGif;
-
-        // Si la fenêtre est déjà prête, on envoie le GIF tout de suite
-        if (win) {
-            win.webContents.send('update-gif', currentGif);
+    const msg = data.toString().trim();
+    if (msg.startsWith('CHANGE:')) {
+        const newGif = msg.split(':')[1];
+        console.log('🔁 Changement demandé vers:', newGif);
+        if (win && win.webContents) {
+            win.webContents.send('update-gif', newGif);
         }
     }
 });
 
 app.whenReady().then(() => {
     createWindow();
-
-    // Si l'app est réactivée (macOS, etc.), on recrée une fenêtre
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) {
-            createWindow();
-        }
-    });
 });
 
-// Ferme proprement tout si on quitte
 app.on('window-all-closed', () => {
     app.quit();
 });
