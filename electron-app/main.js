@@ -1,4 +1,3 @@
-const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { app, BrowserWindow, ipcMain } = require('electron');
@@ -38,22 +37,7 @@ function createWindow() {
         }
     });
 
-    ipcMain.on('change-gif', (event, newGif) => {
-        currentGif = newGif;
-        win.webContents.send('update-gif', currentGif);
-    });
 }
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', (data) => {
-    const msg = data.toString().trim();
-    if (msg.startsWith('CHANGE:')) {
-        const newGif = msg.split(':')[1];
-        console.log('🔁 Changement demandé vers:', newGif);
-        if (win && win.webContents) {
-            win.webContents.send('update-gif', newGif);
-        }
-    }
-});
 
 app.whenReady().then(() => {
     createWindow();
