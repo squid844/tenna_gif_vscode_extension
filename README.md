@@ -9,8 +9,8 @@ As of now it can be used to add your own GIFs to VScode !
 
 1. Clone this repo :
    ```bash
-   git clone https://github.com/<ton-utilisateur>/tenna-dancer-vscode-extension.git
-Download the dependancies :
+   git clone [https://github.com/squid844/tenna_gif_vscode_extension.git]
+2. Download the dependancies :
 
-```bash
+   ```bash
    npm install
